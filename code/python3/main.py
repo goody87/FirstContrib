@@ -5,6 +5,7 @@ import argparse
 import mxnet as mx
 import mxnet.ndarray as nd
 import numpy as np
+from pandas import DataFrame
 
 from load_data import DATA
 from model import MODEL
@@ -18,6 +19,13 @@ ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 root.addHandler(ch)
+
+val_d_dim = [20,20,20,50,50,50,100,100,100]
+val_m_size = [10,20,30,10,20,30,10,20,30]
+val_best_epochs = []
+val_auc_acc = []
+val_accuracy= []
+val_loss = []
 
 def find_file(dir_name, best_epoch):
     for dir, subdir, files in os.walk(dir_name):
@@ -120,6 +128,7 @@ def train_one_dataset(params, file_name, train_q_data, train_qa_data, valid_q_da
 
 def test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
+    val_best_epochs.append(best_epoch)
     g_model = MODEL(n_question=params.n_question,
                     seqlen=params.seqlen,
                     batch_size=params.batch_size,
@@ -127,7 +136,7 @@ def test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch):
                     qa_embed_dim=params.qa_embed_dim,
                     memory_size=params.memory_size,
                     memory_key_state_dim=params.memory_key_state_dim,
-                    memory_value_state_dim=params.memory_value_state_dim,
+                    memory_value_state_dim=params.memory_value_state_dim, 
                     final_fc_dim=params.final_fc_dim)
     # create a module by given a Symbol
     test_net = mx.mod.Module(symbol=g_model.sym_gen(),
@@ -147,149 +156,165 @@ def test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch):
     print("\ntest_auc\t", test_auc)
     print("test_accuracy\t", test_accuracy)
     print("test_loss\t", test_loss)
+    val_auc_acc.append(test_auc)
+    val_accuracy.append(test_accuracy)
+    val_loss.append(test_loss)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Script to test KVMN.')
-    parser.add_argument('--gpus', type=str, default=None, help='the gpus will be used, e.g "0,1,2,3"')
-    parser.add_argument('--max_iter', type=int, default=50, help='number of iterations')
-    parser.add_argument('--test', type=bool, default=False, help='enable testing')
-    parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
-    parser.add_argument('--show', type=bool, default=True, help='print progress')
+if __name__ == '__main__':   
+    for i in range(0,9):
+        parser = argparse.ArgumentParser(description='Script to test KVMN.')
+        parser.add_argument('--gpus', type=str, default=None, help='the gpus will be used, e.g "0,1,2,3"')
+        parser.add_argument('--max_iter', type=int, default=50, help='number of iterations')
+        parser.add_argument('--test', type=bool, default=False, help='enable testing')
+        parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
+        parser.add_argument('--show', type=bool, default=True, help='print progress')
+    
+        dataset = "STATICS"  # synthetic / assist2009_updated / assist2015 / KDDal0506 / STATICS
+        if dataset == "synthetic":
+            parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
+            parser.add_argument('--q_embed_dim', type=int, default=10, help='question embedding dimensions')
+            parser.add_argument('--qa_embed_dim', type=int, default=10, help='answer and question embedding dimensions')
+            parser.add_argument('--memory_size', type=int, default=5, help='memory size')
+        
+            parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
+            parser.add_argument('--init_lr', type=float, default=0.05, help='initial learning rate')
+            parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
+            parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
+            parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
+            parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
+        
+            parser.add_argument('--n_question', type=int, default=50, help='the number of unique questions in the dataset')
+            parser.add_argument('--seqlen', type=int, default=50, help='the allowed maximum length of a sequence')
+            parser.add_argument('--data_dir', type=str, default='../../data/synthetic', help='data directory')
+            parser.add_argument('--data_name', type=str, default='naive_c5_q50_s4000_v1', help='data set name')
+            parser.add_argument('--load', type=str, default='synthetic/v1', help='model file to load')
+            parser.add_argument('--save', type=str, default='synthetic/v1', help='path to save model')
+        if dataset == "assist2009_updated":
+            parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
+            parser.add_argument('--q_embed_dim', type=int, default=50, help='question embedding dimensions')
+            parser.add_argument('--qa_embed_dim', type=int, default=200, help='answer and question embedding dimensions')
+            parser.add_argument('--memory_size', type=int, default=20, help='memory size')
+        
+            parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
+            parser.add_argument('--init_lr', type=float, default=0.05, help='initial learning rate')
+            parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
+            parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
+            parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
+            parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
+        
+            parser.add_argument('--n_question', type=int, default=110, help='the number of unique questions in the dataset')
+            parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
+            parser.add_argument('--data_dir', type=str, default='../../data/assist2009_updated', help='data directory')
+            parser.add_argument('--data_name', type=str, default='assist2009_updated', help='data set name')
+            parser.add_argument('--load', type=str, default='assist2009_updated', help='model file to load')
+            parser.add_argument('--save', type=str, default='assist2009_updated', help='path to save model')
+        elif dataset == "assist2015":
+            parser.add_argument('--batch_size', type=int, default=50, help='the batch size')
+            parser.add_argument('--q_embed_dim', type=int, default=50, help='question embedding dimensions')
+            parser.add_argument('--qa_embed_dim', type=int, default=100, help='answer and question embedding dimensions')
+            parser.add_argument('--memory_size', type=int, default=20, help='memory size')
+        
+            parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
+            parser.add_argument('--init_lr', type=float, default=0.1, help='initial learning rate')
+            parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
+            parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
+            parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
+            parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
+        
+            parser.add_argument('--n_question', type=int, default=100, help='the number of unique questions in the dataset')
+            parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
+            parser.add_argument('--data_dir', type=str, default='../../data/assist2015', help='data directory')
+            parser.add_argument('--data_name', type=str, default='assist2015', help='data set name')
+            parser.add_argument('--load', type=str, default='assist2015', help='model file to load')
+            parser.add_argument('--save', type=str, default='assist2015', help='path to save model')
+        elif dataset == "STATICS":
+            parser.add_argument('--batch_size', type=int, default=10, help='the batch size')
+            parser.add_argument('--q_embed_dim', type=int, default=val_d_dim[i], help='question embedding dimensions')
+            parser.add_argument('--qa_embed_dim', type=int, default=100, help='answer and question embedding dimensions')
+            parser.add_argument('--memory_size', type=int, default=val_m_size[i], help='memory size')
+        
+            parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
+            parser.add_argument('--init_lr', type=float, default=0.01, help='initial learning rate')
+            parser.add_argument('--final_lr', type=float, default=1E-5,
+                                help='learning rate will not decrease after hitting this threshold')
+            parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
+            parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
+            parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
+        
+            parser.add_argument('--n_question', type=int, default=1223, help='the number of unique questions in the dataset')
+            parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
+            parser.add_argument('--data_dir', type=str, default='../../data/STATICS', help='data directory')
+            parser.add_argument('--data_name', type=str, default='STATICS', help='data set name')
+            parser.add_argument('--load', type=str, default='STATICS', help='model file to load')
+            parser.add_argument('--save', type=str, default='STATICS', help='path to save model')
+            params = parser.parse_args()
+            params.lr = params.init_lr
+            params.memory_key_state_dim = params.q_embed_dim
+            params.memory_value_state_dim = params.qa_embed_dim
+            
+            params.dataset = dataset
+            if params.gpus == None:
+                ctx = mx.cpu()
+                print("Training with cpu ...")
+            else:
+                ctx = mx.gpu(int(params.gpus))
+                print("Training with gpu(" + params.gpus + ") ...")
+            params.ctx = ctx
+            
+            # Read data
+            dat = DATA(n_question=params.n_question, seqlen=params.seqlen, separate_char=',')
+            
+            seedNum =224
+            np.random.seed(seedNum)
+            if not params.test:
+                params.memory_key_state_dim = params.q_embed_dim
+                params.memory_value_state_dim = params.qa_embed_dim
+                d = vars(params)
+                for key in d:
+                    print('\t', key, '\t', d[key])
+                file_name = 'b' + str(params.batch_size) + \
+                            '_q' + str(params.q_embed_dim) + '_qa' + str(params.qa_embed_dim) + \
+                            '_m' + str(params.memory_size) + '_std' + str(params.init_std) + \
+                            '_lr' + str(params.init_lr) + '_gn' + str(params.maxgradnorm) + \
+                            '_f' + str(params.final_fc_dim)+'_s'+str(seedNum)
+                train_data_path = params.data_dir + "/" + params.data_name + "_train1.csv"
+                valid_data_path = params.data_dir + "/" + params.data_name + "_valid1.csv"
+                train_q_data, train_qa_data = dat.load_data(train_data_path)
+                valid_q_data, valid_qa_data = dat.load_data(valid_data_path)
+                print("\n")
+                print("train_q_data.shape", train_q_data.shape, train_q_data)  ###(3633, 200) = (#sample, seqlen)
+                print("train_qa_data.shape", train_qa_data.shape, train_qa_data)  ###(3633, 200) = (#sample, seqlen)
+                print("valid_q_data.shape", valid_q_data.shape)  ###(1566, 200)
+                print("valid_qa_data.shape", valid_qa_data.shape)  ###(1566, 200)
+                print("\n")
+                best_epoch = train_one_dataset(params, file_name, train_q_data, train_qa_data, valid_q_data, valid_qa_data)
+                if params.train_test:
+                    test_data_path = params.data_dir + "/" + params.data_name + "_test.csv"
+                    test_q_data, test_qa_data = dat.load_data(test_data_path)
+                    test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch)
+            else:
+                params.memory_key_state_dim = params.q_embed_dim
+                params.memory_value_state_dim = params.qa_embed_dim
+                test_data_path = params.data_dir + "/" + params.data_name  +"_test.csv"
+                test_q_data, test_qa_data = dat.load_data(test_data_path)
+                best_epoch = 30
+                file_name = 'b' + str(params.batch_size) + \
+                            '_q' + str(params.q_embed_dim) + '_qa' + str(params.qa_embed_dim) + \
+                            '_m' + str(params.memory_size) + '_std' + str(params.init_std) + \
+                            '_lr' + str(params.init_lr) + '_gn' + str(params.maxgradnorm) + \
+                            '_f' + str(params.final_fc_dim) + '_s' + str(seedNum)
+                test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch)
+        
+        
+        
 
-    dataset = "STATICS"  # synthetic / assist2009_updated / assist2015 / KDDal0506 / STATICS
+    
+    df = DataFrame({'State Dimension':val_d_dim,'Memory Size':val_m_size,'The Best Epoch': val_best_epochs, 'Test AUC': val_auc_acc, 'Test Accuracy':val_accuracy,'Test Loss':val_loss})
+    df.to_excel('Our_Model2_Validation.xlsx', sheet_name='Sheet1', index=False)
+    #df.to_excel('DKVMN_Validation.xlsx', sheet_name='DKVMN', index=False)
+        
+        
 
-    if dataset == "synthetic":
-        parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
-        parser.add_argument('--q_embed_dim', type=int, default=10, help='question embedding dimensions')
-        parser.add_argument('--qa_embed_dim', type=int, default=10, help='answer and question embedding dimensions')
-        parser.add_argument('--memory_size', type=int, default=5, help='memory size')
+    
 
-        parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
-        parser.add_argument('--init_lr', type=float, default=0.05, help='initial learning rate')
-        parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
-        parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
-        parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
-        parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
-
-        parser.add_argument('--n_question', type=int, default=50, help='the number of unique questions in the dataset')
-        parser.add_argument('--seqlen', type=int, default=50, help='the allowed maximum length of a sequence')
-        parser.add_argument('--data_dir', type=str, default='../../data/synthetic', help='data directory')
-        parser.add_argument('--data_name', type=str, default='naive_c5_q50_s4000_v1', help='data set name')
-        parser.add_argument('--load', type=str, default='synthetic/v1', help='model file to load')
-        parser.add_argument('--save', type=str, default='synthetic/v1', help='path to save model')
-    if dataset == "assist2009_updated":
-        parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
-        parser.add_argument('--q_embed_dim', type=int, default=50, help='question embedding dimensions')
-        parser.add_argument('--qa_embed_dim', type=int, default=200, help='answer and question embedding dimensions')
-        parser.add_argument('--memory_size', type=int, default=20, help='memory size')
-
-        parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
-        parser.add_argument('--init_lr', type=float, default=0.05, help='initial learning rate')
-        parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
-        parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
-        parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
-        parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
-
-        parser.add_argument('--n_question', type=int, default=110, help='the number of unique questions in the dataset')
-        parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
-        parser.add_argument('--data_dir', type=str, default='../../data/assist2009_updated', help='data directory')
-        parser.add_argument('--data_name', type=str, default='assist2009_updated', help='data set name')
-        parser.add_argument('--load', type=str, default='assist2009_updated', help='model file to load')
-        parser.add_argument('--save', type=str, default='assist2009_updated', help='path to save model')
-    elif dataset == "assist2015":
-        parser.add_argument('--batch_size', type=int, default=50, help='the batch size')
-        parser.add_argument('--q_embed_dim', type=int, default=50, help='question embedding dimensions')
-        parser.add_argument('--qa_embed_dim', type=int, default=100, help='answer and question embedding dimensions')
-        parser.add_argument('--memory_size', type=int, default=20, help='memory size')
-
-        parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
-        parser.add_argument('--init_lr', type=float, default=0.1, help='initial learning rate')
-        parser.add_argument('--final_lr', type=float, default=1E-5, help='learning rate will not decrease after hitting this threshold')
-        parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
-        parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
-        parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
-
-        parser.add_argument('--n_question', type=int, default=100, help='the number of unique questions in the dataset')
-        parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
-        parser.add_argument('--data_dir', type=str, default='../../data/assist2015', help='data directory')
-        parser.add_argument('--data_name', type=str, default='assist2015', help='data set name')
-        parser.add_argument('--load', type=str, default='assist2015', help='model file to load')
-        parser.add_argument('--save', type=str, default='assist2015', help='path to save model')
-    elif dataset == "STATICS":
-        parser.add_argument('--batch_size', type=int, default=10, help='the batch size')
-        parser.add_argument('--q_embed_dim', type=int, default=50, help='question embedding dimensions')
-        parser.add_argument('--qa_embed_dim', type=int, default=100, help='answer and question embedding dimensions')
-        parser.add_argument('--memory_size', type=int, default=50, help='memory size')
-
-        parser.add_argument('--init_std', type=float, default=0.1, help='weight initialization std')
-        parser.add_argument('--init_lr', type=float, default=0.01, help='initial learning rate')
-        parser.add_argument('--final_lr', type=float, default=1E-5,
-                            help='learning rate will not decrease after hitting this threshold')
-        parser.add_argument('--momentum', type=float, default=0.9, help='momentum rate')
-        parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
-        parser.add_argument('--final_fc_dim', type=float, default=50, help='hidden state dim for final fc layer')
-
-        parser.add_argument('--n_question', type=int, default=1223, help='the number of unique questions in the dataset')
-        parser.add_argument('--seqlen', type=int, default=200, help='the allowed maximum length of a sequence')
-        parser.add_argument('--data_dir', type=str, default='../../data/STATICS', help='data directory')
-        parser.add_argument('--data_name', type=str, default='STATICS', help='data set name')
-        parser.add_argument('--load', type=str, default='STATICS', help='model file to load')
-        parser.add_argument('--save', type=str, default='STATICS', help='path to save model')
-
-    params = parser.parse_args()
-    params.lr = params.init_lr
-    params.memory_key_state_dim = params.q_embed_dim
-    params.memory_value_state_dim = params.qa_embed_dim
-
-    params.dataset = dataset
-    if params.gpus == None:
-        ctx = mx.cpu()
-        print("Training with cpu ...")
-    else:
-        ctx = mx.gpu(int(params.gpus))
-        print("Training with gpu(" + params.gpus + ") ...")
-    params.ctx = ctx
-
-    # Read data
-    dat = DATA(n_question=params.n_question, seqlen=params.seqlen, separate_char=',')
-
-    seedNum =224
-    np.random.seed(seedNum)
-    if not params.test:
-        params.memory_key_state_dim = params.q_embed_dim
-        params.memory_value_state_dim = params.qa_embed_dim
-        d = vars(params)
-        for key in d:
-            print('\t', key, '\t', d[key])
-        file_name = 'b' + str(params.batch_size) + \
-                    '_q' + str(params.q_embed_dim) + '_qa' + str(params.qa_embed_dim) + \
-                    '_m' + str(params.memory_size) + '_std' + str(params.init_std) + \
-                    '_lr' + str(params.init_lr) + '_gn' + str(params.maxgradnorm) + \
-                    '_f' + str(params.final_fc_dim)+'_s'+str(seedNum)
-        train_data_path = params.data_dir + "/" + params.data_name + "_train1.csv"
-        valid_data_path = params.data_dir + "/" + params.data_name + "_valid1.csv"
-        train_q_data, train_qa_data = dat.load_data(train_data_path)
-        valid_q_data, valid_qa_data = dat.load_data(valid_data_path)
-        print("\n")
-        print("train_q_data.shape", train_q_data.shape, train_q_data)  ###(3633, 200) = (#sample, seqlen)
-        print("train_qa_data.shape", train_qa_data.shape, train_qa_data)  ###(3633, 200) = (#sample, seqlen)
-        print("valid_q_data.shape", valid_q_data.shape)  ###(1566, 200)
-        print("valid_qa_data.shape", valid_qa_data.shape)  ###(1566, 200)
-        print("\n")
-        best_epoch = train_one_dataset(params, file_name, train_q_data, train_qa_data, valid_q_data, valid_qa_data)
-        if params.train_test:
-            test_data_path = params.data_dir + "/" + params.data_name + "_test.csv"
-            test_q_data, test_qa_data = dat.load_data(test_data_path)
-            test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch)
-    else:
-        params.memory_key_state_dim = params.q_embed_dim
-        params.memory_value_state_dim = params.qa_embed_dim
-        test_data_path = params.data_dir + "/" + params.data_name  +"_test.csv"
-        test_q_data, test_qa_data = dat.load_data(test_data_path)
-        best_epoch = 30
-        file_name = 'b' + str(params.batch_size) + \
-                    '_q' + str(params.q_embed_dim) + '_qa' + str(params.qa_embed_dim) + \
-                    '_m' + str(params.memory_size) + '_std' + str(params.init_std) + \
-                    '_lr' + str(params.init_lr) + '_gn' + str(params.maxgradnorm) + \
-                    '_f' + str(params.final_fc_dim) + '_s' + str(seedNum)
-        test_one_dataset(params, file_name, test_q_data, test_qa_data, best_epoch)
+   

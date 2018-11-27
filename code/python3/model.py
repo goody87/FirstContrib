@@ -1,6 +1,7 @@
 import mxnet as mx
 import mxnet.ndarray as nd
 import ast as ast
+import numpy as np
 from memory import DKVMN
 
 def safe_eval(expr):
@@ -107,30 +108,47 @@ class MODEL(object):
         input_embed_l = []
         for i in range(self.seqlen):
             ## Attention
-            q = slice_q_embed_data[i]
+            
+            q = mx.sym.L2Normalization(slice_q_embed_data[i], mode='instance')
             correlation_weight = mem.attention(q)
 
             ## Read Process
             read_content = mem.read(correlation_weight) #Shape (batch_size, memory_state_dim)
             ### save intermedium data
-            value_read_content_l.append(read_content)
+            
+            value_read_content_l.append(mx.sym.L2Normalization(read_content, mode='instance'))
             input_embed_l.append(q)
-
-            ## Write Process
-            qa = slice_qa_embed_data[i]
-            new_memory_value = mem.write(correlation_weight, qa)
+            
+             ## Write Process
+            #qa = slice_qa_embed_data[i] 
+            #new_memory_value = mem.write(correlation_weight, mx.sym.Concat(qa , read_content))
+            qa = mx.sym.concat(mx.sym.L2Normalization(read_content, mode='instance'),mx.sym.L2Normalization(slice_qa_embed_data[i], mode='instance'))
+            #qa=mx.sym.L2Normalization(slice_qa_embed_data[i], mode='instance')
+            new_memory_value = mem.write(correlation_weight,qa)
 
         all_read_value_content = mx.sym.Concat(*value_read_content_l, num_args=self.seqlen, dim=0)
 
         input_embed_content = mx.sym.Concat(*input_embed_l, num_args=self.seqlen, dim=0)
-        input_embed_content = mx.sym.FullyConnected(data=input_embed_content, num_hidden=50, name="input_embed_content")
-        input_embed_content = mx.sym.Activation(data=input_embed_content, act_type='tanh', name="input_embed_content_tanh")
+        input_embed_content = mx.sym.FullyConnected(data=mx.sym.L2Normalization(input_embed_content, mode='instance'), num_hidden=64, name="input_embed_content")
+        input_embed_content = mx.sym.Activation(data=mx.sym.L2Normalization(input_embed_content, mode='instance'), act_type='tanh', name="input_embed_content_tanh")
 
-        read_content_embed = mx.sym.FullyConnected(data=mx.sym.Concat(all_read_value_content, input_embed_content, num_args=2, dim=1),
-                                                   num_hidden=self.final_fc_dim, name="read_content_embed")
-        read_content_embed = mx.sym.Activation(data=read_content_embed, act_type='tanh', name="read_content_embed_tanh")
 
-        pred = mx.sym.FullyConnected(data=read_content_embed, num_hidden=1, name="final_fc")
+        read_content_embed = mx.sym.FullyConnected(data=mx.sym.Concat(mx.sym.L2Normalization(all_read_value_content, mode='instance'), mx.sym.L2Normalization(input_embed_content, mode='instance'), num_args=2, dim=1),
+                                                   num_hidden=self.final_fc_dim, name="read_content_embed") 
+       
+        read_content_embed = mx.sym.Activation(data= mx.sym.L2Normalization(read_content_embed, mode='instance'), act_type='tanh', name="read_content_embed_tanh")  
+        
+        #================================================[ Updated for F value]====================================
+#        for i in range(self.seqlen):
+#           ## Write Process
+#           qa = mx.symbol.batch_dot(slice_qa_embed_data[i],read_content_embed)
+#           #qa = mx.sym.Concat(slice_qa_embed_data[i],read_content_embed)
+#           #qa = read_content_embed
+#           new_memory_value = mem.write(correlation_weight, qa)
+
+        #==========================================================================================================
+         
+        pred = mx.sym.FullyConnected(data=mx.sym.L2Normalization(read_content_embed, mode='instance'), num_hidden=1, name="final_fc")
 
         pred_prob = logistic_regression_mask_output(data=mx.sym.Reshape(pred, shape=(-1, )),
                                                     label=mx.sym.Reshape(data=target, shape=(-1,)),
