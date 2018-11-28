@@ -3,6 +3,23 @@ import mxnet.ndarray as nd
 import ast as ast
 import numpy as np
 from memory import DKVMN
+import skfuzzy as fuzz
+
+def getFuzzyRep(arr):
+    fuzzRep = ""
+    x_qual = np.arange(0, 11, 0.1)
+    qual_lo = fuzz.trimf(x_qual, [0, 0, 0.5])
+    qual_md = fuzz.trimf(x_qual, [0, 0.5, 1.0])
+    qual_hi = fuzz.trimf(x_qual, [0.5, 1.0, 1.0])
+    FuzzVals=["Low","Medium","High"]
+    i =0
+    for val in arr:
+        if i == 0:
+            fuzzRep = FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+        else:
+            fuzzRep = fuzzRep +","+FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+        i+=1
+    return fuzzRep 
 
 def safe_eval(expr):
     if type(expr) is str:
@@ -111,6 +128,13 @@ class MODEL(object):
             
             q = mx.sym.L2Normalization(slice_q_embed_data[i], mode='instance')
             correlation_weight = mem.attention(q)
+            
+            #=============================[ DELETE ME]=========================
+            print("Inspecting the correlation weight vector content: \n")
+            tmp = correlation_weight.bind()
+            for val in tmp:
+                print(val);
+            #==================================================================
 
             ## Read Process
             read_content = mem.read(correlation_weight) #Shape (batch_size, memory_state_dim)
