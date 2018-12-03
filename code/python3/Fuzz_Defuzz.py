@@ -18,6 +18,7 @@ def getMaxIndices(lst):
 
 def getFuzzyRep(arr):
     fuzzRep = ""
+    fuzztot = 0
     x_qual = np.arange(0, 11, 0.1)
     qual_lo = fuzz.trimf(x_qual, [0, 0, 0.5])
     qual_md = fuzz.trimf(x_qual, [0, 0.5, 1.0])
@@ -25,12 +26,23 @@ def getFuzzyRep(arr):
     FuzzVals=["Low","Medium","High"]
     i =0
     for val in arr:
+        
+        tmp = FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+        
         if i == 0:
-            fuzzRep = FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+            fuzzRep = tmp
         else:
-            fuzzRep = fuzzRep +","+FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+            fuzzRep = fuzzRep + "," + tmp
+        
+        if tmp == "Low":
+            fuzztot += 1
+        elif tmp == "Medium":
+            fuzztot += 2
+        else:
+            fuzztot += 3
+                
         i+=1
-    return fuzzRep 
+    return fuzzRep, fuzztot 
     
 
 x_qual = np.arange(0, 11, 0.1)
@@ -41,7 +53,8 @@ qual_hi = fuzz.trimf(x_qual, [0.5, 1.0, 1.0])
 
 valToFuzz = 0.547
 fuzzarr = []
-tst = np.random.uniform(0.0,1.0,100)
+np.random.seed(777)
+tst = np.random.uniform(0.0,1.0,10)
 
 qual_level_lo = fuzz.interp_membership(x_qual, qual_lo, valToFuzz)
 fuzzarr.append(qual_level_lo)
@@ -56,7 +69,8 @@ print (qual_level_hi)
 
 print (getMaxIndices(fuzzarr))
 
-print(getFuzzyRep(tst))
-
+frep, ftot = getFuzzyRep(tst)
+print(frep)
+print ("total is: "+ str(ftot));
 
             

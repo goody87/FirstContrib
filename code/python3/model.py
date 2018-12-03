@@ -5,8 +5,41 @@ import numpy as np
 from memory import DKVMN
 import skfuzzy as fuzz
 
+class Fuzzify(mx.operator.CustomOp):
+    def forward(self, is_train, req, in_data, out_data, aux):
+        x = in_data[0].asnumpy()
+        y = getFuzzyRep(x)
+        self.assign(out_data[0], req[0], y)
+
+    def backward(self, req, out_grad, in_data, out_data, in_grad, aux):
+        y = out_data[0].asnumpy()
+        self.assign(in_grad[0], req[0], y)
+
+@mx.operator.register("fuzzify")
+class FuzzifyProp(mx.operator.CustomOpProp):
+    def __init__(self):
+        super(FuzzifyProp, self).__init__(need_top_grad=False)
+
+    def list_arguments(self):
+        return ['data']
+
+    def list_outputs(self):
+        return ['output']
+
+    def infer_shape(self, in_shape):
+        data_shape = in_shape[0]
+        output_shape = 1
+        return [data_shape], [output_shape], []
+
+    def infer_type(self, in_type):
+        return in_type, np.int32, []
+
+    def create_operator(self, ctx, shapes, dtypes):
+        return Fuzzify()
+
 def getFuzzyRep(arr):
     fuzzRep = ""
+    fuzztot = 0
     x_qual = np.arange(0, 11, 0.1)
     qual_lo = fuzz.trimf(x_qual, [0, 0, 0.5])
     qual_md = fuzz.trimf(x_qual, [0, 0.5, 1.0])
@@ -14,12 +47,23 @@ def getFuzzyRep(arr):
     FuzzVals=["Low","Medium","High"]
     i =0
     for val in arr:
+        
+        tmp = FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+        
         if i == 0:
-            fuzzRep = FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+            fuzzRep = tmp
         else:
-            fuzzRep = fuzzRep +","+FuzzVals[np.argmax([fuzz.interp_membership(x_qual, qual_lo, val),fuzz.interp_membership(x_qual, qual_md, val),fuzz.interp_membership(x_qual, qual_hi, val)])]
+            fuzzRep = fuzzRep + "," + tmp
+        
+        if tmp == "Low":
+            fuzztot += 1
+        elif tmp == "Medium":
+            fuzztot += 2
+        else:
+            fuzztot += 3
+                
         i+=1
-    return fuzzRep 
+    return fuzztot 
 
 def safe_eval(expr):
     if type(expr) is str:
@@ -123,24 +167,22 @@ class MODEL(object):
 
         value_read_content_l = []
         input_embed_l = []
+        
+        readDict = {object :[]}
+        
         for i in range(self.seqlen):
             ## Attention
             
             q = mx.sym.L2Normalization(slice_q_embed_data[i], mode='instance')
             correlation_weight = mem.attention(q)
             
-            #=============================[ DELETE ME]=========================
-            print("Inspecting the correlation weight vector content: \n")
-            tmp = correlation_weight.bind()
-            for val in tmp:
-                print(val);
-            #==================================================================
-
             ## Read Process
             read_content = mem.read(correlation_weight) #Shape (batch_size, memory_state_dim)
-            ### save intermedium data
             
+            
+            ### save intermedium data [OLD]
             value_read_content_l.append(mx.sym.L2Normalization(read_content, mode='instance'))
+          
             input_embed_l.append(q)
             
              ## Write Process
@@ -150,6 +192,16 @@ class MODEL(object):
             #qa=mx.sym.L2Normalization(slice_qa_embed_data[i], mode='instance')
             new_memory_value = mem.write(correlation_weight,qa)
 
+        #================================[ Cluster related read_contents based on fuzzy representation] ==============
+        for i in range(0,len(value_read_content_l)):
+            current_fuzz_rep = mx.symbol.Custom(data=value_read_content_l[i], name='fuzzkey', op_type='fuzzify')
+            for j in range(0,len(value_read_content_l)):
+                if i != j:
+                    tmp_fuzz = mx.symbol.Custom(data=value_read_content_l[j], name='fuzzkey', op_type='fuzzify')
+                    if current_fuzz_rep == tmp_fuzz:
+                        value_read_content_l[i] = mx.sym.concat(value_read_content_l[i],value_read_content_l[j])
+        #=================================================================================
+        
         all_read_value_content = mx.sym.Concat(*value_read_content_l, num_args=self.seqlen, dim=0)
 
         input_embed_content = mx.sym.Concat(*input_embed_l, num_args=self.seqlen, dim=0)
