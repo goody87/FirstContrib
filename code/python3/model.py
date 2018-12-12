@@ -195,16 +195,20 @@ class MODEL(object):
         #================================[ Cluster related read_contents based on fuzzy representation] ==============
         for i in range(0,len(value_read_content_l)):
             current_fuzz_rep = mx.symbol.Custom(data=value_read_content_l[i], name='fuzzkey', op_type='fuzzify')
+            related = [value_read_content_l[i]]
             for j in range(0,len(value_read_content_l)):
                 if i != j:
                     tmp_fuzz = mx.symbol.Custom(data=value_read_content_l[j], name='fuzzkey', op_type='fuzzify')
-                    if current_fuzz_rep == tmp_fuzz:
-                        value_read_content_l[i] = mx.sym.concat(value_read_content_l[i],value_read_content_l[j])
+                    if current_fuzz_rep.__eq__(tmp_fuzz):
+                        related.append(value_read_content_l[j])
+                        value_read_content_l[i] = mx.sym.Reshape(data=mx.sym.RNN(data=related,state_size=self.memory_state_dim,num_layers=2,mode ='lstm',p =0.2), # Shape (batch_size, 1, memory_state_dim)
+                                 shape=(-1,self.memory_state_dim)) #mx.sym.concat(value_read_content_l[i],value_read_content_l[j])
+                        
         #=================================================================================
         
         all_read_value_content = mx.sym.Concat(*value_read_content_l, num_args=self.seqlen, dim=0)
 
-        input_embed_content = mx.sym.Concat(*input_embed_l, num_args=self.seqlen, dim=0)
+        input_embed_content = mx.sym.Concat(*input_embed_l, num_args=self.seqlen, dim=0) 
         input_embed_content = mx.sym.FullyConnected(data=mx.sym.L2Normalization(input_embed_content, mode='instance'), num_hidden=64, name="input_embed_content")
         input_embed_content = mx.sym.Activation(data=mx.sym.L2Normalization(input_embed_content, mode='instance'), act_type='tanh', name="input_embed_content_tanh")
 
