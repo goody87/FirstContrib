@@ -181,7 +181,7 @@ class MODEL(object):
             
             
             ### save intermedium data [OLD]
-            value_read_content_l.append(mx.sym.L2Normalization(read_content, mode='instance'))
+            value_read_content_l.append(read_content)
           
             input_embed_l.append(q)
             
@@ -199,10 +199,11 @@ class MODEL(object):
             for j in range(0,len(value_read_content_l)):
                 if i != j:
                     tmp_fuzz = mx.symbol.Custom(data=value_read_content_l[j], name='fuzzkey', op_type='fuzzify')
-                    if current_fuzz_rep.__eq__(tmp_fuzz):
+                    if current_fuzz_rep.tojson() == tmp_fuzz.tojson():
                         related.append(value_read_content_l[j])
-                        value_read_content_l[i] = mx.sym.Reshape(data=mx.sym.RNN(data=related,state_size=self.memory_state_dim,num_layers=2,mode ='lstm',p =0.2), # Shape (batch_size, 1, memory_state_dim)
-                                 shape=(-1,self.memory_state_dim)) #mx.sym.concat(value_read_content_l[i],value_read_content_l[j])
+                        
+            value_read_content_l[i] = mx.sym.Reshape(data=mx.sym.RNN(data=related,state_size=self.memory_value_state_dim,num_layers=2,mode ='lstm',p =0.2), # Shape (batch_size, 1, memory_state_dim)
+                                 shape=(-1,self.memory_value_state_dim)) 
                         
         #=================================================================================
         
